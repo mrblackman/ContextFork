@@ -2,7 +2,6 @@
 ### A Clean-Break Handoff Specification for Long-Horizon Agentic LLM Conversations
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-mrblackman-yellow.svg?style=flat&logo=buy-me-a-coffee)](https://buymeacoffee.com/mrblackman)
 [![Specification: IPSF-1.2](https://img.shields.io/badge/Specification-IPSF--1.2-brightgreen.svg)]()
 [![Reference Implementation: Python](https://img.shields.io/badge/Reference%20CLI-contextfork.py-blueviolet.svg)](contextfork.py)
 [![Target: AI Coding Agents](https://img.shields.io/badge/Target-AI%20Coding%20Agents-orange.svg)]()
@@ -263,14 +262,6 @@ The specification is designed for modular adoption across multiple developer int
 | **Audit Trail** | Monolithic linear log | Parent tagged as `[Forked -> XYZ]` | **Verifiable Auditability** |
 
 > **Note on Metrics:** Context and cost reductions (98.2%) are mathematical calculations based on token volume (119.4k → 2.2k). TTFT and latency speedups are empirical observations in our testing environment; actual latency and cost vary by model provider, caching architecture, network queue depth, and output length.
-
----
-
-## ☕ Support
-
-If the ContextFork specification helps your agentic workflows or inspires your tooling architecture, consider buying me a coffee!
-
-[!["Buy Me A Coffee"](https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png)](https://buymeacoffee.com/mrblackman)
 
 ---
 
