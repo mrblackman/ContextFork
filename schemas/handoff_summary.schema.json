@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mrblackman/ContextFork/schemas/handoff_summary.schema.json",
+  "title": "HandoffSummary",
+  "description": "Standardized 4-part structured handoff summary for clean-break session forking.",
+  "type": "object",
+  "properties": {
+    "forked_from_session_id": {
+      "type": "string",
+      "description": "Unique identifier of the bloated parent conversation."
+    },
+    "forked_at_step": {
+      "type": "integer",
+      "description": "Step index at which the fork occurred."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "active_goal": {
+      "type": "string",
+      "description": "Exact problem being solved, bug being fixed, or milestone being executed."
+    },
+    "settled_decisions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Locked-in architectural decisions and rejected alternatives to prevent looping."
+    },
+    "modified_files": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "List of files created, modified, or deleted in the parent session."
+    },
+    "immediate_next_step": {
+      "type": "string",
+      "description": "Exact next command, test, or code change to execute right now."
+    }
+  },
+  "required": [
+    "forked_from_session_id",
+    "timestamp",
+    "active_goal",
+    "settled_decisions",
+    "modified_files",
+    "immediate_next_step"
+  ]
+}
