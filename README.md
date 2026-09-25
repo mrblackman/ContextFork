@@ -17,6 +17,9 @@
 > *"LLM summarizes; machines verify."*  
 > *"Don't ask the AI to remember what the machine can verify."*
 
+> ⚠️ **Specification Status: RFC Draft — Under Active Development**  
+> This repository specifies an open, vendor-neutral protocol and working reference implementation (`IPSF-1.2`). We actively welcome architectural feedback, peer review, and harness implementation proposals from the autonomous agent engineering community.
+
 ---
 
 ## 🎯 1. Executive Summary
