@@ -1,0 +1,7 @@
+# ContextFork Ephemeral Package Directory
+.contextfork/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class

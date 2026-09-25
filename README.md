@@ -4,12 +4,19 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-mrblackman-yellow.svg?style=flat&logo=buy-me-a-coffee)](https://buymeacoffee.com/mrblackman)
 [![Specification: IPSF-1.2](https://img.shields.io/badge/Specification-IPSF--1.2-brightgreen.svg)]()
+[![Reference Implementation: Python](https://img.shields.io/badge/Reference%20CLI-contextfork.py-blueviolet.svg)](contextfork.py)
 [![Target: AI Coding Agents](https://img.shields.io/badge/Target-AI%20Coding%20Agents-orange.svg)]()
 
 **Author:** Mustafa KILINC ([@mrblackman](https://github.com/mrblackman))  
 **Version:** IPSF-1.2 (Normative Protocol Specification)  
 **Document ID:** `RFC-IPSF-001`  
 **Repository:** [github.com/mrblackman/ContextFork](https://github.com/mrblackman/ContextFork)  
+
+---
+
+> 💡 **Core Principles:**  
+> *"LLM summarizes; machines verify."*  
+> *"Don't ask the AI to remember what the machine can verify."*
 
 ---
 
@@ -23,7 +30,7 @@ In extended engineering sessions (100–250+ steps), developers face two compoun
 
 **ContextFork (IPSF-1.2)** formalizes an interoperable, vendor-agnostic protocol solving this dilemma through two core pillars:
 1. **Ambient Context Telemetry:** Real-time UI visibility into active token count, step count, and attention degradation risk signals.
-2. **Native "Summarize & Fork" (Session Forking):** A single-click handoff protocol that autonomously compresses a bloated session into a **verifiable 6-part handoff package**, launching a clean continuation session in the same workspace with **verifiable architectural continuity and ~98% immediate token reduction**.
+2. **Native "Summarize & Fork" (Session Forking):** A single-click handoff protocol that autonomously compresses a bloated session into a **verifiable 6-part handoff package**, launching a clean continuation session in the same workspace that **preserves the architectural decisions and working state captured by the handoff schema while achieving an immediate ~98% token reduction**.
 
 ---
 
@@ -140,7 +147,7 @@ When triggered, a structured synthesis is generated complying with [`session-han
 
 ### 3. Working Tree State & Machine Git Metadata
 * **Git Status:** HEAD commit, current branch, clean/dirty state.
-* **Modified Files:** Exact files created, modified, or deleted (`git diff --stat`).
+* **Modified Files:** Exact files created, modified, or deleted (`git diff HEAD --stat`).
 
 ### 4. Failed Approaches & Known Pitfalls (⚡ Anti-Loop Shield)
 * What was attempted, what failed, and why it was abandoned.
@@ -157,21 +164,43 @@ When triggered, a structured synthesis is generated complying with [`session-han
 
 ## 🛡️ 5. Verifiable Handoff Package (Deterministic State)
 
-A text-only LLM summary is vulnerable to omission or drift. To guarantee true continuity, ContextFork specifies a **Verifiable Handoff Package** complying with [`verifiable-package.schema.json`](schemas/verifiable-package.schema.json) persisted automatically on fork:
+A text-only LLM summary is vulnerable to omission or drift. Because `git diff HEAD` does NOT capture newly created, untracked files, ContextFork specifies a **Verifiable Handoff Package** complying with [`verifiable-package.schema.json`](schemas/verifiable-package.schema.json) persisted automatically on fork:
 
 ```text
 .contextfork/
 ├── handoff_summary.md       # Synthesized 6-part markdown handoff (LLM intent)
 ├── git_status.json          # Untracked, staged, and modified files (Machine truth)
-├── git_diff.patch           # Exact working-tree diff against parent HEAD
-└── session_metadata.json    # Parent ID, token counts, step duration, timestamp
+├── git_diff.patch           # Exact working-tree diff against parent HEAD (Staged + Unstaged)
+├── untracked_manifest.json  # Manifest of untracked files (size, sha256)
+├── untracked/               # Snapshots of new/untracked text files (<1MB)
+└── session_metadata.json    # Parent ID, token counts, step duration, full commit SHA
 ```
 
-When the child session initializes, it reads the synthesized markdown for intent, while anchoring its physical perception in the deterministic `git_diff.patch` and `git_status.json`.
+When the child session initializes, it reads the synthesized markdown for intent, while anchoring its physical perception in the deterministic diff, status, and untracked file snapshots.
 
 ---
 
-## 📐 6. Formal Protocol Schemas (`schemas/`)
+## 💻 6. Reference Implementation (`contextfork.py`)
+
+ContextFork provides an official, zero-dependency reference CLI written in pure Python 3.10+ standard library. It executes deterministically on Windows, macOS, and Linux without requiring `pip install`:
+
+```bash
+# 1. Run live terminal telemetry and forking simulation
+python contextfork.py demo
+
+# 2. Inspect active repository and .contextfork package state
+python contextfork.py status
+
+# 3. Export a verifiable handoff package (capturing diff, status, and untracked files)
+python contextfork.py export --session "session-123" --goal "Refactoring Auth Service"
+
+# 4. Validate package integrity against IPSF-1.2 JSON schemas
+python contextfork.py validate
+```
+
+---
+
+## 📐 7. Formal Protocol Schemas (`schemas/`)
 
 ContextFork provides formal JSON Schemas for tool authors and IDE vendors to implement interoperable context lifecycle management:
 
@@ -184,9 +213,9 @@ ContextFork provides formal JSON Schemas for tool authors and IDE vendors to imp
 
 ---
 
-## 🧭 7. The Architecture: Agent Context System (ACS)
+## 🧭 8. The Architecture: Agent Context System (ACS)
 
-ContextFork is designed to operate within a three-tier **Agent Context & Efficiency Stack**:
+ContextFork operates within a unified three-tier **Agent Context & Efficiency Stack**:
 
 ```text
                ┌────────────────────────────────────────────────────────┐
@@ -207,14 +236,29 @@ Beyond temporal continuity (Session A → Session B), ContextFork powers **role-
 
 ---
 
-## 🚀 8. Illustrative Benchmark & Impact
+## 🔌 9. Potential Integration Surfaces
+
+The specification is designed for modular adoption across multiple developer interface layers:
+
+* **IDE Platforms (Antigravity, Cursor, Windsurf):**
+  * Ambient status-bar badge for live context telemetry.
+  * Toolbar action replacing destructive "New Chat" with "Fork Chat with Checkpoint".
+  * Drawer panel showing verifiable `.contextfork/` artifacts.
+* **CLI & Terminal Tools (Claude Code, Antigravity CLI, Aider):**
+  * Native `/fork` or `--fork` commands to seed a clean child session thread from the current state.
+* **Agent Orchestration Frameworks (LangChain, AutoGen, CrewAI):**
+  * Context lifecycle middleware and session state provider for subagent context shaping.
+
+---
+
+## 🚀 10. Illustrative Benchmark & Impact
 
 | Metric | Bloated Parent Session | Forked Child Session | Improvement |
 | :--- | :--- | :--- | :--- |
 | **Prompt Context Size** | 119,400 tokens | ~2,200 tokens | **98.2% Reduction** (Direct Math) |
 | **TTFT (Latency)** | 12 – 18 seconds | < 1.2 seconds | **~12x Speedup** (Empirical) |
 | **Per-Turn Cost / Quota** | ~120k tokens / turn | ~2.5k tokens / turn | **98% Cost Savings** (Direct Math) |
-| **Attention Weight** | Diluted across 400KB logs | Focused on 6-Part Schema | **Mitigates Attention Dilution** |
+| **Attention Weight** | Diluted across 400KB logs | Focused on 6-Part Schema | **Reduces exposure to irrelevant history** |
 | **Mistake Prevention** | Prone to repeating old errors | Guarded by *Failed Approaches* | **Eliminates Regressive Retries** |
 | **Audit Trail** | Monolithic linear log | Parent tagged as `[Forked -> XYZ]` | **Verifiable Auditability** |
 
@@ -230,7 +274,7 @@ If the ContextFork specification helps your agentic workflows or inspires your t
 
 ---
 
-## 📜 9. License & Attribution
+## 📜 11. License & Attribution
 
 Released under the **[MIT License](LICENSE)**.
 
