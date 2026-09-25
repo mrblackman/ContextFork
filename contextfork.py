@@ -110,7 +110,11 @@ class GitInspector:
                     modified.append(path)
 
         # 4. Diff HEAD (Hem staged hem unstaged tüm değişiklikleri kapsar)
-        diff_head_full = cls.run_cmd(["git", "diff", "HEAD"], cwd=root)
+        # --binary: CRLF ve binary dosyaların patch'te korunması (Windows güvenliği)
+        # -c color.diff=false: ANSI renk kodlarının patch'i bozmasını engeller
+        diff_head_full = cls.run_cmd(
+            ["git", "-c", "color.diff=false", "diff", "--binary", "HEAD"], cwd=root
+        )
         diff_head_stat = cls.run_cmd(["git", "diff", "HEAD", "--stat"], cwd=root).strip()
 
         is_dirty = bool(modified or staged or untracked)
@@ -158,6 +162,44 @@ class ContextForkEngine:
         return hasher.hexdigest()
 
     @classmethod
+    def _capture_untracked_file(cls, abs_path, rel_path_str, repo_root, untracked_dir, manifest):
+        """
+        Tek bir untracked dosyayı manifest'e ekler ve snapshot'ını alır.
+        Güvenlik: repo sınırı dışına çıkan symlink'ler sessizce atlanır.
+        """
+        # Symlink güvenliği: hedef repo dışındaysa atla
+        if abs_path.is_symlink():
+            try:
+                resolved = abs_path.resolve()
+                repo_resolved = repo_root.resolve()
+                resolved.relative_to(repo_resolved)  # Repo içindeyse geçer, değilse ValueError
+            except ValueError:
+                return  # Repo dışı symlink — atla
+
+        try:
+            size = abs_path.stat().st_size
+        except OSError:
+            return
+
+        sha256 = cls._compute_sha256(abs_path)
+        is_text = cls._is_text_file(abs_path)
+        captured = False
+
+        if is_text and size <= cls.MAX_UNTRACKED_FILE_SIZE:
+            dest_path = untracked_dir / rel_path_str
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(abs_path, dest_path)
+            captured = True
+
+        manifest.append({
+            "path": rel_path_str,
+            "size_bytes": size,
+            "sha256": sha256,
+            "is_text": is_text,
+            "captured": captured
+        })
+
+    @classmethod
     def export_package(
         cls,
         parent_id=None,
@@ -165,13 +207,14 @@ class ContextForkEngine:
         accumulated_tokens=None,
         step_count=None,
         custom_handoff_path=None,
-        start_path=None
+        start_path=None,
+        force=False
     ):
         """
         Deterministik .contextfork/ paketini oluşturur:
-        - git_diff.patch (HEAD'e karşı tam fark)
+        - git_diff.patch (HEAD'e karşı tam fark, binary+CRLF güvenli)
         - git_status.json (makine durumu)
-        - untracked_manifest.json & untracked/ (yeni dosyaların tam içeriği)
+        - untracked_manifest.json & untracked/ (yeni dosyaların tam içeriği, nested dizinler dahil)
         - session_metadata.json (protokol manifesti)
         - handoff_summary.md (6 parçalı kanıtlı özet)
         """
@@ -179,12 +222,20 @@ class ContextForkEngine:
             git_state = GitInspector.inspect(start_path)
         except GitError as e:
             print(f"❌ Error: {e}", file=sys.stderr)
-            return False
+            sys.exit(1)
 
         repo_root = git_state["root"]
         fork_path = cls.get_fork_dir(repo_root)
 
-        # Temiz bir paket alanı hazırla
+        # Mevcut paket varsa --force olmadan dur
+        if fork_path.exists() and not force:
+            print(
+                f"❌ Error: A .contextfork package already exists at {fork_path}.\n"
+                "   Use --force to overwrite it.",
+                file=sys.stderr
+            )
+            sys.exit(1)
+
         if fork_path.exists():
             shutil.rmtree(fork_path)
         fork_path.mkdir(parents=True, exist_ok=True)
@@ -193,38 +244,34 @@ class ContextForkEngine:
         parent_session_id = parent_id or f"session-{uuid.uuid4().hex[:8]}"
         child_session_id = f"fork-{uuid.uuid4().hex[:8]}"
 
-        # 1. git_diff.patch (HEAD'e karşı staged + unstaged)
+        # 1. git_diff.patch (HEAD'e karşı staged + unstaged, binary+CRLF güvenli)
         patch_file = fork_path / "git_diff.patch"
         patch_file.write_text(git_state["diff_full"], encoding="utf-8")
 
         # 2. untracked_manifest.json ve untracked/ snapshot klasörü
         # (git diff HEAD'in kapsamadığı yeni dosyaların kurtarılması)
+        # Nested untracked dizinler dahil rekürsif tarama
         untracked_manifest = []
         untracked_dir = fork_path / "untracked"
-        
-        for rel_path in git_state["untracked"]:
-            abs_path = repo_root / rel_path
-            if not abs_path.is_file():
-                continue
 
-            size = abs_path.stat().st_size
-            sha256 = cls._compute_sha256(abs_path)
-            is_text = cls._is_text_file(abs_path)
-            captured = False
+        for rel_path_str in git_state["untracked"]:
+            abs_path = repo_root / rel_path_str
 
-            if is_text and size <= cls.MAX_UNTRACKED_FILE_SIZE:
-                dest_path = untracked_dir / rel_path
-                dest_path.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(abs_path, dest_path)
-                captured = True
-
-            untracked_manifest.append({
-                "path": rel_path.replace("\\", "/"),
-                "size_bytes": size,
-                "sha256": sha256,
-                "is_text": is_text,
-                "captured": captured
-            })
+            # Dizinse içindeki tüm dosyaları rekürsif tara
+            if abs_path.is_dir():
+                for child in abs_path.rglob("*"):
+                    if child.is_file():
+                        child_rel = child.relative_to(repo_root)
+                        cls._capture_untracked_file(
+                            child, str(child_rel).replace("\\", "/"),
+                            repo_root, untracked_dir, untracked_manifest
+                        )
+            elif abs_path.is_file():
+                cls._capture_untracked_file(
+                    abs_path, rel_path_str.replace("\\", "/"),
+                    repo_root, untracked_dir, untracked_manifest
+                )
+            # Symlink veya bilinmeyen türleri atla (güvenlik)
 
         untracked_manifest_file = fork_path / "untracked_manifest.json"
         untracked_manifest_file.write_text(json.dumps(untracked_manifest, indent=2), encoding="utf-8")
@@ -398,7 +445,7 @@ class ContextForkEngine:
             except json.JSONDecodeError as e:
                 errors.append(f"untracked_manifest.json contains invalid JSON: {e}")
 
-        # 5. handoff_summary.md 6-parçalı yapı kontrolü
+        # 5. handoff_summary.md 6-parçalı yapı kontrolü + doldurulmamış şablon tespiti
         summary_file = fork_path / "handoff_summary.md"
         if summary_file.is_file():
             content = summary_file.read_text(encoding="utf-8")
@@ -413,6 +460,70 @@ class ContextForkEngine:
             for sec in required_sections:
                 if sec not in content:
                     errors.append(f"handoff_summary.md missing required section: '{sec}'")
+            # Doldurulmamış şablon tespiti ({{ veya TODO işaretçiler)
+            if "{{" in content or "}}" in content:
+                errors.append(
+                    "handoff_summary.md contains unfilled template placeholders ('{{...}}'). "
+                    "Fill in all sections before validating."
+                )
+
+        # 6. untracked_manifest SHA-256 yeniden doğrulama
+        manifest_file = fork_path / "untracked_manifest.json"
+        if manifest_file.is_file():
+            try:
+                items = json.loads(manifest_file.read_text(encoding="utf-8"))
+                if isinstance(items, list):
+                    untracked_snapshot_dir = fork_path / "untracked"
+                    for item in items:
+                        if not item.get("captured", False):
+                            continue
+                        snap_path = untracked_snapshot_dir / item["path"]
+                        if not snap_path.is_file():
+                            errors.append(
+                                f"Captured untracked snapshot missing: untracked/{item['path']}"
+                            )
+                            continue
+                        actual_sha = cls._compute_sha256(snap_path)
+                        if actual_sha != item.get("sha256", ""):
+                            errors.append(
+                                f"SHA-256 mismatch for captured file '{item['path']}': "
+                                f"expected {item.get('sha256', 'N/A')}, got {actual_sha}"
+                            )
+            except (json.JSONDecodeError, KeyError):
+                pass  # JSON parse error already reported above
+
+        # 7. git_status.json'daki HEAD commit'in repoda varlığını doğrula
+        status_file = fork_path / "git_status.json"
+        if status_file.is_file():
+            try:
+                st = json.loads(status_file.read_text(encoding="utf-8"))
+                head = st.get("head_commit", "")
+                if head and len(head) == 40:
+                    try:
+                        GitInspector.run_cmd(
+                            ["git", "cat-file", "-e", f"{head}^{{commit}}"], cwd=repo_root
+                        )
+                    except GitError:
+                        errors.append(
+                            f"HEAD commit '{head[:7]}' recorded in git_status.json does not "
+                            "exist in this repository. Package may be from a different repo."
+                        )
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+        # 8. git_diff.patch uygulanabilirlik kontrolü (git apply --check)
+        patch_file = fork_path / "git_diff.patch"
+        if patch_file.is_file() and patch_file.stat().st_size > 0:
+            try:
+                GitInspector.run_cmd(
+                    ["git", "apply", "--check", "--whitespace=nowarn", str(patch_file)],
+                    cwd=repo_root
+                )
+            except GitError as e:
+                warnings.append(
+                    f"git_diff.patch cannot be cleanly applied to current working tree "
+                    f"(working tree may have diverged from package state): {e}"
+                )
 
         print("=" * 65)
         print("🔍 [ContextFork] Package Validation Report")
@@ -423,7 +534,7 @@ class ContextForkEngine:
                 print(f"   • {err}")
             return False
 
-        print("✅ PASSED: Verifiable Handoff Package is fully compliant with IPSF-1.2!")
+        print("✅ PASSED: Verifiable Handoff Package is compliant with IPSF-1.2.")
         if warnings:
             print(f"⚠️  {len(warnings)} warning(s):")
             for w in warnings:
@@ -485,9 +596,9 @@ def run_demo():
     print("  'Don't ask the AI to remember what the machine can verify.'\n")
 
     print("[Step 1] Ambient Context Telemetry Monitoring:")
-    print("  🟢 Step 25  | Tokens:  32,400 | Level: Normal    | Action: Continue")
-    print("  🟡 Step 82  | Tokens:  68,100 | Level: Caution   | Action: Prepare Milestone")
-    print("  🔴 Step 226 | Tokens: 119,400 | Level: High Load | Action: Fork Recommended\n")
+    print("  🟢 Step 25  | Tokens:  32,400 | Level: Normal   | Action: Continue")
+    print("  🟡 Step 82  | Tokens:  68,100 | Level: Caution  | Action: Prepare Milestone")
+    print("  🔴 Step 226 | Tokens: 119,400 | Level: Critical | Action: Fork Recommended\n")
 
     print("[Step 2] Capturing Deterministic Git Ground Truth:")
     try:
@@ -500,44 +611,53 @@ def run_demo():
     except Exception as e:
         print(f"  (Simulated Environment): HEAD 7ed9b80, Branch main, Dirty True ({e})")
 
-    print("\n[Step 3] Executing 'Summarize & Fork'...")
-    success = ContextForkEngine.export_package(
+    print("\n[Step 3] Executing 'Summarize & Fork' (force=True for demo repeatability)...")
+    ContextForkEngine.export_package(
         parent_id="session-demo-226",
         goal="Context Lifecycle Protocol Standard",
         accumulated_tokens=119400,
-        step_count=226
+        step_count=226,
+        force=True
     )
 
-    if success:
-        print("\n[Step 4] Running Package Verification (validate):")
-        ContextForkEngine.validate_package()
-        print("\n🎯 Outcome: Verifiable handoff package ready. New session launches with zero log bloat!")
+    print("\n[Step 4] Running Package Verification (validate):")
+    ContextForkEngine.validate_package()
+    print("\n🎯 Outcome: Verifiable handoff package ready. New session launches with architectural continuity.")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="ContextFork CLI Reference Implementation (IPSF-1.2)"
+        description="ContextFork Reference Implementation (IPSF-1.2) — see README for protocol spec."
     )
     subparsers = parser.add_subparsers(dest="command")
 
     # status
-    subparsers.add_parser("status", help="Shows repository state and active .contextfork package info")
+    subparsers.add_parser("status", help="Show repository state and active .contextfork package info")
 
     # export
-    export_parser = subparsers.add_parser("export", help="Generates the deterministic .contextfork package")
+    export_parser = subparsers.add_parser("export", help="Generate the deterministic .contextfork package")
     export_parser.add_argument("--session", default=None, help="Parent session identifier")
     export_parser.add_argument("--goal", default="Active Development", help="Active goal description")
     export_parser.add_argument("--tokens", type=int, default=None, help="Accumulated prompt tokens (if known)")
     export_parser.add_argument("--steps", type=int, default=None, help="Total steps executed (if known)")
-    export_parser.add_argument("--handoff", default=None, help="Path to pre-existing handoff markdown file")
+    export_parser.add_argument("--handoff", default=None, help="Path to a pre-written handoff markdown file")
+    export_parser.add_argument(
+        "--force", action="store_true",
+        help="Overwrite an existing .contextfork package (default: error if package already exists)"
+    )
 
     # validate
-    subparsers.add_parser("validate", help="Validates the .contextfork package against IPSF-1.2 specifications")
+    subparsers.add_parser("validate", help="Validate the .contextfork package against IPSF-1.2")
 
     # demo
-    subparsers.add_parser("demo", help="Runs an interactive terminal simulation")
+    subparsers.add_parser("demo", help="Run an interactive terminal demonstration")
 
     args = parser.parse_args()
+
+    # Argümansız çalışma → help göster (demo otomatik ÇALIŞMAZ)
+    if not args.command:
+        parser.print_help()
+        sys.exit(0)
 
     if args.command == "status":
         ContextForkEngine.get_status()
@@ -547,14 +667,16 @@ def main():
             goal=args.goal,
             accumulated_tokens=args.tokens,
             step_count=args.steps,
-            custom_handoff_path=args.handoff
+            custom_handoff_path=args.handoff,
+            force=args.force
         )
     elif args.command == "validate":
         valid = ContextForkEngine.validate_package()
         sys.exit(0 if valid else 1)
-    elif args.command == "demo" or len(sys.argv) == 1:
+    elif args.command == "demo":
         run_demo()
 
 
 if __name__ == "__main__":
     main()
+
