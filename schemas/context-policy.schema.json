@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mrblackman/ContextFork/schemas/context-policy.schema.json",
+  "title": "ContextPolicy",
+  "description": "Configurable thresholds and heuristic rules for ambient context observability and forking (IPSF-1.2).",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "default": "1.2"
+    },
+    "tokens": {
+      "type": "object",
+      "properties": {
+        "warning_threshold": {
+          "type": "integer",
+          "default": 50000,
+          "description": "Token count at which UI signals Caution (amber)."
+        },
+        "fork_recommended_threshold": {
+          "type": "integer",
+          "default": 80000,
+          "description": "Token count at which UI signals Critical (red) and advises forking."
+        },
+        "hard_limit": {
+          "type": ["integer", "null"],
+          "default": null,
+          "description": "Optional maximum limit to trigger an automated fork modal."
+        }
+      },
+      "required": ["warning_threshold", "fork_recommended_threshold"]
+    },
+    "steps": {
+      "type": "object",
+      "properties": {
+        "warning_threshold": {
+          "type": "integer",
+          "default": 75
+        },
+        "fork_recommended_threshold": {
+          "type": "integer",
+          "default": 120
+        }
+      }
+    },
+    "fork_package_defaults": {
+      "type": "object",
+      "properties": {
+        "export_git_diff": {
+          "type": "boolean",
+          "default": true
+        },
+        "export_git_status": {
+          "type": "boolean",
+          "default": true
+        },
+        "export_metadata": {
+          "type": "boolean",
+          "default": true
+        },
+        "include_failed_approaches": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    }
+  },
+  "required": ["tokens"]
+}

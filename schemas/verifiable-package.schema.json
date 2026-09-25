@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mrblackman/ContextFork/schemas/verifiable-package.schema.json",
+  "title": "VerifiableHandoffPackage",
+  "description": "Structure of the deterministic verifiable handoff package persisted in .contextfork/ (IPSF-1.2).",
+  "type": "object",
+  "properties": {
+    "manifest_version": {
+      "type": "string",
+      "default": "1.2"
+    },
+    "parent_session_id": {
+      "type": "string"
+    },
+    "child_session_id": {
+      "type": "string"
+    },
+    "fork_timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "package_files": {
+      "type": "object",
+      "properties": {
+        "summary_markdown_path": {
+          "type": "string",
+          "default": ".contextfork/handoff_summary.md"
+        },
+        "git_diff_patch_path": {
+          "type": "string",
+          "default": ".contextfork/git_diff.patch"
+        },
+        "git_status_json_path": {
+          "type": "string",
+          "default": ".contextfork/git_status.json"
+        },
+        "session_metadata_json_path": {
+          "type": "string",
+          "default": ".contextfork/session_metadata.json"
+        }
+      },
+      "required": ["summary_markdown_path", "git_diff_patch_path", "session_metadata_json_path"]
+    },
+    "git_verification": {
+      "type": "object",
+      "properties": {
+        "head_commit": { "type": "string" },
+        "branch": { "type": "string" },
+        "is_clean": { "type": "boolean" },
+        "diff_stat": { "type": "string" }
+      },
+      "required": ["head_commit", "branch", "is_clean"]
+    }
+  },
+  "required": ["manifest_version", "parent_session_id", "fork_timestamp", "package_files", "git_verification"]
+}

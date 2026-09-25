@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mrblackman/ContextFork/schemas/context-telemetry.schema.json",
+  "title": "ContextTelemetry",
+  "description": "Standardized live telemetry payload for ambient context observability (IPSF-1.2).",
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "tokens": {
+      "type": "object",
+      "properties": {
+        "total_active": { "type": "integer" },
+        "input_history": { "type": "integer" },
+        "cached": { "type": "integer" },
+        "tool_outputs": { "type": "integer" },
+        "system_prompt": { "type": "integer" }
+      },
+      "required": ["total_active"]
+    },
+    "steps": {
+      "type": "object",
+      "properties": {
+        "current_step": { "type": "integer" },
+        "failed_commands": { "type": "integer" }
+      },
+      "required": ["current_step"]
+    },
+    "session": {
+      "type": "object",
+      "properties": {
+        "age_seconds": { "type": "integer" },
+        "touched_files_count": { "type": "integer" }
+      }
+    },
+    "health": {
+      "type": "object",
+      "properties": {
+        "risk_level": {
+          "type": "string",
+          "enum": ["optimal", "caution", "critical"]
+        },
+        "badge_color": {
+          "type": "string",
+          "enum": ["green", "amber", "red"]
+        },
+        "recommendation": {
+          "type": "string",
+          "enum": ["continue", "wrap_milestone", "fork_recommended"]
+        },
+        "message": { "type": "string" }
+      },
+      "required": ["risk_level", "recommendation"]
+    }
+  },
+  "required": ["session_id", "tokens", "steps", "health"]
+}

@@ -1,13 +1,13 @@
-# ContextFork — Real-Time Context Observability & Native Session Forking Specification (IPSF-1.1)
-### A Clean-Break Handoff Architecture for Long-Horizon Agentic LLM Conversations
+# ContextFork — Real-Time Context Observability & Native Session Forking Protocol (IPSF-1.2)
+### A Clean-Break Handoff Specification for Long-Horizon Agentic LLM Conversations
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-mrblackman-yellow.svg?style=flat&logo=buy-me-a-coffee)](https://buymeacoffee.com/mrblackman)
-[![Status: Draft RFC](https://img.shields.io/badge/Status-Draft%20RFC-brightgreen.svg)]()
+[![Specification: IPSF-1.2](https://img.shields.io/badge/Specification-IPSF--1.2-brightgreen.svg)]()
 [![Target: AI Coding Agents](https://img.shields.io/badge/Target-AI%20Coding%20Agents-orange.svg)]()
 
 **Author:** Mustafa KILINC ([@mrblackman](https://github.com/mrblackman))  
-**Version:** IPSF-1.1 (Updated September 2026)  
+**Version:** IPSF-1.2 (Normative Protocol Specification)  
 **Document ID:** `RFC-IPSF-001`  
 **Repository:** [github.com/mrblackman/ContextFork](https://github.com/mrblackman/ContextFork)  
 
@@ -15,27 +15,27 @@
 
 ## 🎯 1. Executive Summary
 
-Modern Large Language Models boast theoretical context windows of 1M to 2M+ tokens. However, empirical benchmarks (Stanford's *Lost in the Middle*, Chroma's *MECW*, RULER) establish that **effective reasoning accuracy for autonomous agentic coding degrades significantly as token contexts expand ("Context Rot")**. 
+Modern Large Language Models advertise theoretical context windows of 1M to 2M+ tokens. However, empirical research (Stanford's *Lost in the Middle*, Chroma's *MECW*, RULER) establishes that **effective reasoning accuracy for autonomous agentic coding degrades significantly as token contexts expand ("Context Rot")**. 
 
 In extended engineering sessions (100–250+ steps), developers face two compounding bottlenecks:
-1. **Zero Context Observability:** Users work completely blind without real-time indicators for accumulated prompt tokens, tool output weight, or step counts. Sessions silently balloon past 100,000+ tokens, turning every routine prompt into a massive compute drain and triggering catastrophic attention dilution.
+1. **Zero Context Observability:** Users operate without real-time indicators for accumulated prompt tokens, tool output weight, or step counts. Sessions silently balloon past 100,000+ tokens, turning every routine prompt into a massive compute drain and triggering severe attention dilution.
 2. **The "New Chat" Abstraction Failure:** The traditional "New Chat" button is a destructive reset. Developers resist starting fresh sessions because manually summarizing 50+ steps of architectural decisions, file modifications, and pending tasks creates severe handoff friction.
 
-**ContextFork (IPSF-1.1)** solves this dilemma through a lightweight, vendor-agnostic architecture:
+**ContextFork (IPSF-1.2)** formalizes an interoperable, vendor-agnostic protocol solving this dilemma through two core pillars:
 1. **Ambient Context Telemetry:** Real-time UI visibility into active token count, step count, and attention degradation risk signals.
-2. **Native "Summarize & Fork" (Session Forking):** A single-click handoff mechanism that autonomously compresses a bloated session into a **verifiable 6-part handoff package**, launching a clean continuation session in the same workspace with **high architectural continuity, deterministic ground truth, and a ~98% immediate token reduction**.
+2. **Native "Summarize & Fork" (Session Forking):** A single-click handoff protocol that autonomously compresses a bloated session into a **verifiable 6-part handoff package**, launching a clean continuation session in the same workspace with **verifiable architectural continuity and ~98% immediate token reduction**.
 
 ---
 
 ## 💥 2. The Problem: "Context Rot" as an Attention Risk Signal
 
-In transformer architectures, attention is not uniform across large token horizons. As prompt context grows:
-* **Attention Dilution:** The attention matrix dilutes over historical terminal noise, failed tool attempts, and verbose build logs.
+In transformer architectures, attention weights dilute over large token horizons. As prompt context grows:
+* **Attention Dilution:** The attention matrix dilutes across historical terminal noise, failed tool attempts, and verbose build logs.
 * **Repetitive Failure Looping:** Models begin treating their own past failed tool calls as "ground truth" or stylistic guidelines, falling into repetitive failure loops.
 * **Loss of System Constraints:** High-priority system instructions (Constitutional rules, security isolation, git practices) placed at the beginning of the context fall into the "Lost in the Middle" trough.
 
 > **Context Compression ≠ Context Preservation:**  
-> Compressing 120,000 tokens into 2,000 tokens is a lossy operation. If an agent summary omits *why* certain paths failed, the newly spawned child agent will repeat identical mistakes. True continuity requires pairing high-level LLM synthesis with verifiable state.
+> Compressing 120,000 tokens into 2,000 tokens is inherently a lossy compression. If an agent summary omits *why* certain paths failed or lacks machine-verifiable evidence, the newly spawned child agent will repeat identical mistakes. True continuity requires pairing high-level LLM synthesis with deterministic working-tree state.
 
 ### Real-World Production Case Study:
 During an active engineering and strategy session on an AI coding agent:
@@ -53,16 +53,16 @@ Even a simple user reply like *"Yes, proceed"* forces the model to ingest **119,
 AI coding environments must provide ambient, live feedback on the conversation's physical footprint.
 
 ### 3.1. UI Placement & Anatomy
-Located subtly on the bottom status bar (adjacent to the model selector) or directly under each assistant response:
+Located on the status bar (adjacent to the model selector) or directly under assistant turns:
 
 ```text
-[ 🟢 34.2k tokens | Step 28 | Optimal ]
+[ 🟢 34.2k tokens | Step 28 | Normal ]
 [ 🟡 68.5k tokens | Step 84 | Attention Risk Warning ]
 [ 🔴 119.4k tokens | Step 226 | Context Rot Alert — Fork Recommended ]
 ```
 
 ### 3.2. Detailed Telemetry Inspector (Pop-over)
-Clicking the badge exposes a diagnostic breakdown:
+Clicking the badge exposes a diagnostic breakdown complying with [`context-telemetry.schema.json`](schemas/context-telemetry.schema.json):
 
 ```text
 CONTEXT METRICS
@@ -81,20 +81,36 @@ RECOMMENDATION:
 ✓ Recommendation: Trigger "Summarize & Fork"
 ```
 
-### 3.3. Attention Risk Thresholds
-Token count acts as an **Attention Risk Signal** calibrated by transcript density:
+### 3.3. Configurable Policy & Reference Thresholds
+Rather than hardcoded limits, ContextFork specifies configurable heuristic defaults via [`context-policy.schema.json`](schemas/context-policy.schema.json):
+
+```json
+{
+  "context_policy": {
+    "tokens": {
+      "warning_threshold": 50000,
+      "fork_recommended_threshold": 80000,
+      "hard_limit": null
+    },
+    "steps": {
+      "warning_threshold": 75,
+      "fork_recommended_threshold": 120
+    }
+  }
+}
+```
 
 | Token Range | Step Range | Risk Level | Indicator | Recommended Action |
 | :--- | :--- | :--- | :--- | :--- |
-| `< 50,000` | `< 75` | **Optimal** | 🟢 Green badge | Normal agentic operation. Full reasoning accuracy. |
-| `50,000 - 80,000` | `75 - 120` | **Caution** | 🟡 Amber badge | Avoid large log dumps; prepare to wrap milestone. |
-| `> 80,000` | `> 120` | **Critical** | 🔴 Red badge + alert | High attention dilution risk. Session Fork recommended. |
+| `< 50,000` | `< 75` | **Normal** | 🟢 Green badge | Standard operating range. Baseline attention density. |
+| `50,000 - 80,000` | `75 - 120` | **Caution** | 🟡 Amber badge | Attention dilution risk elevated; avoid large log dumps. |
+| `> 80,000` | `> 120` | **High Load** | 🔴 Red badge + alert | High attention dilution risk. Session checkpoint/fork recommended. |
 
 ---
 
 ## ⚡ 4. Feature 2: Native "Summarize & Fork" (The 6-Part Schema)
 
-ContextFork turns session restarts from a destructive wipe into an intelligent checkpoint.
+ContextFork transforms session restarts from a destructive wipe into an intelligent, verifiable checkpoint.
 
 ### 4.1. The Forking Workflow
 
@@ -108,26 +124,30 @@ flowchart LR
 ```
 
 ### 4.2. The 6-Part Structured Handoff Schema
-When triggered, a structured synthesis is generated across 6 non-negotiable sections:
+When triggered, a structured synthesis is generated complying with [`session-handoff.schema.json`](schemas/session-handoff.schema.json):
 
 ```markdown
 # 🔄 Session Handoff Checkpoint (Forked from Session <ID>)
 
 ### 1. Active Goal & Scope
 * Exact feature, bug, or architectural milestone being developed.
+* Concrete acceptance criteria.
 
-### 2. Settled Decisions & Tradeoffs
-* Irreversible technical choices and architectural commitments made in the parent session.
+### 2. Settled Decisions, Tradeoffs & Evidence (Provenance)
+* Accepted architectural choices and their rationale.
+* Explicitly rejected alternatives (prevents re-debating).
+* **Evidence:** File paths, commit hashes, or test results proving this decision (e.g. `src/Auth/JwtService.cs`, Commit `7ed9b80`).
 
-### 3. Modified Files & Working Tree State
-* Exact files created, edited, or deleted in the working directory.
+### 3. Working Tree State & Machine Git Metadata
+* **Git Status:** HEAD commit, current branch, clean/dirty state.
+* **Modified Files:** Exact files created, modified, or deleted (`git diff --stat`).
 
-### 4. Failed Approaches & Dead Ends (⚡ Anti-Loop Shield)
-* What was attempted, why it failed, and what must NEVER be retried.
-* Strictly prevents the child agent from repeating known mistakes.
+### 4. Failed Approaches & Known Pitfalls (⚡ Anti-Loop Shield)
+* What was attempted, what failed, and why it was abandoned.
+* **Barred Action:** Explicit instruction prohibiting the child agent from retrying this failed approach.
 
 ### 5. Open Risks, Edge Cases & Unknowns
-* Lingering technical risks, external dependencies, or unverified edge cases.
+* Lingering technical risks, external dependencies, or unverified assumptions.
 
 ### 6. Immediate Next Action
 * The single, atomic next command, test, or code edit to execute immediately.
@@ -135,48 +155,70 @@ When triggered, a structured synthesis is generated across 6 non-negotiable sect
 
 ---
 
-## 🛡️ 5. Verifiable Handoff Package (Hybrid Synthesis)
+## 🛡️ 5. Verifiable Handoff Package (Deterministic State)
 
-A text-only LLM summary is vulnerable to omission or minor hallucinations. To guarantee true continuity, ContextFork specifies a **Verifiable Handoff Package** generated automatically on fork:
+A text-only LLM summary is vulnerable to omission or drift. To guarantee true continuity, ContextFork specifies a **Verifiable Handoff Package** complying with [`verifiable-package.schema.json`](schemas/verifiable-package.schema.json) persisted automatically on fork:
 
 ```text
 .contextfork/
-├── handoff_summary.md       # Synthesized 6-part markdown handoff
-├── git_status.json          # Untracked, staged, and modified files
+├── handoff_summary.md       # Synthesized 6-part markdown handoff (LLM intent)
+├── git_status.json          # Untracked, staged, and modified files (Machine truth)
 ├── git_diff.patch           # Exact working-tree diff against parent HEAD
-└── session_metadata.json    # Parent ID, token counts, step duration
+└── session_metadata.json    # Parent ID, token counts, step duration, timestamp
 ```
 
-When the child session initializes, it reads the synthesized markdown for intent, while anchoring its physical perception in the deterministic `git_diff.patch` and `git_status.json`. This provides **verifiable ground truth**.
+When the child session initializes, it reads the synthesized markdown for intent, while anchoring its physical perception in the deterministic `git_diff.patch` and `git_status.json`.
 
 ---
 
-## 🧭 6. The Next Evolution: Role-Based Context Shaping
+## 📐 6. Formal Protocol Schemas (`schemas/`)
 
-While ContextFork primarily handles **temporal continuity** (Session A → Session B), its underlying schema naturally powers **multi-agent context shaping**:
+ContextFork provides formal JSON Schemas for tool authors and IDE vendors to implement interoperable context lifecycle management:
 
-```mermaid
-flowchart TD
-    ORCH["Orchestrator (Full Context)"] -->|Filters Context| ROUTER["ContextFork Shaping Engine"]
-    ROUTER -->|Goal + Architecture| PLAN["Planner Subagent"]
-    ROUTER -->|Diffs + Target Files| CODE["Coder Subagent"]
-    ROUTER -->|Expected Output + Edge Cases| TEST["Tester Subagent"]
-```
-
-By filtering the parent session's context into specialized slices, subagents remain lean, fast, and free of peripheral noise.
+| Schema File | Purpose |
+| :--- | :--- |
+| **[`session-handoff.schema.json`](schemas/session-handoff.schema.json)** | Validates the 6-part handoff summary with evidence and provenance. |
+| **[`context-policy.schema.json`](schemas/context-policy.schema.json)** | Defines configurable warning/fork token thresholds and step heuristics. |
+| **[`context-telemetry.schema.json`](schemas/context-telemetry.schema.json)** | Validates the ambient context telemetry payload emitted to IDE UI. |
+| **[`verifiable-package.schema.json`](schemas/verifiable-package.schema.json)** | Validates the structure and file manifests of the `.contextfork/` bundle. |
 
 ---
 
-## 🚀 7. Measurable Impact & ROI
+## 🧭 7. The Architecture: Agent Context System (ACS)
+
+ContextFork is designed to operate within a three-tier **Agent Context & Efficiency Stack**:
+
+```text
+               ┌────────────────────────────────────────────────────────┐
+               │         AGENT CONTEXT & EFFICIENCY STACK               │
+               └────────────────────────────────────────────────────────┘
+                                           │
+         ┌─────────────────────────────────┼─────────────────────────────────┐
+         ▼                                 ▼                                 ▼
+   [ RETRIEVE ]                      [ MANAGE ]                        [ TRANSFER ]
+  git-grep-first                    ContextFold                        ContextFork
+  (Search Policy)            (Virtual Memory Paging)             (Session Handoff & Shaping)
+  • Zero token bloat         • In-place folding                  • 6-part verifiable handoff
+  • git grep --untracked     • UI side-drawers                   • Evidence & Git state
+  • Anti-Select-String       • On-demand hydration               • Multi-agent context shaping
+```
+
+Beyond temporal continuity (Session A → Session B), ContextFork powers **role-based context shaping**, filtering parent context into specialized slices for subagents (Planner, Coder, Tester).
+
+---
+
+## 🚀 8. Illustrative Benchmark & Impact
 
 | Metric | Bloated Parent Session | Forked Child Session | Improvement |
 | :--- | :--- | :--- | :--- |
-| **Prompt Context Size** | 119,400 tokens | ~2,200 tokens | **98.2% Reduction** |
-| **TTFT (Latency)** | 12 – 18 seconds | < 1.2 seconds | **~12x Speedup** |
-| **Per-Turn Cost / Quota** | ~120k tokens / turn | ~2.5k tokens / turn | **98% Cost Savings** |
-| **Attention Weight** | Diluted across 400KB logs | Focused on 6-Part Schema | **Eliminates Repetitive Loops** |
-| **Mistake Prevention** | Prone to repeating old errors | Guarded by *Failed Approaches* | **Zero Regressive Retries** |
-| **Audit Trail** | Monolithic linear log | Parent tagged as `[Forked -> XYZ]` | **Clean Verifiable History** |
+| **Prompt Context Size** | 119,400 tokens | ~2,200 tokens | **98.2% Reduction** (Direct Math) |
+| **TTFT (Latency)** | 12 – 18 seconds | < 1.2 seconds | **~12x Speedup** (Empirical) |
+| **Per-Turn Cost / Quota** | ~120k tokens / turn | ~2.5k tokens / turn | **98% Cost Savings** (Direct Math) |
+| **Attention Weight** | Diluted across 400KB logs | Focused on 6-Part Schema | **Mitigates Attention Dilution** |
+| **Mistake Prevention** | Prone to repeating old errors | Guarded by *Failed Approaches* | **Eliminates Regressive Retries** |
+| **Audit Trail** | Monolithic linear log | Parent tagged as `[Forked -> XYZ]` | **Verifiable Auditability** |
+
+> **Note on Metrics:** Context and cost reductions (98.2%) are mathematical calculations based on token volume (119.4k → 2.2k). TTFT and latency speedups are empirical observations in our testing environment; actual latency and cost vary by model provider, caching architecture, network queue depth, and output length.
 
 ---
 
@@ -188,14 +230,14 @@ If the ContextFork specification helps your agentic workflows or inspires your t
 
 ---
 
-## 📜 8. License & Attribution
+## 📜 9. License & Attribution
 
 Released under the **[MIT License](LICENSE)**.
 
 ```bibtex
 @misc{kilinc2026contextfork,
   author = {Mustafa KILINC (@mrblackman)},
-  title = {ContextFork: Real-Time Context Observability and Native Session Forking Specification (IPSF-1.1)},
+  title = {ContextFork: Real-Time Context Observability and Native Session Forking Protocol (IPSF-1.2)},
   year = {2026},
   publisher = {GitHub},
   howpublished = {\url{https://github.com/mrblackman/ContextFork}}

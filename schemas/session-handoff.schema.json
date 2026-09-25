@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mrblackman/ContextFork/schemas/session-handoff.schema.json",
+  "title": "SessionHandoff",
+  "description": "Standardized 6-part verifiable handoff schema with evidence and provenance (IPSF-1.2).",
+  "type": "object",
+  "properties": {
+    "forked_from_session_id": {
+      "type": "string",
+      "description": "Unique identifier of the bloated parent conversation."
+    },
+    "forked_at_step": {
+      "type": "integer",
+      "description": "Step index at which the fork occurred."
+    },
+    "accumulated_tokens": {
+      "type": "integer",
+      "description": "Total prompt tokens accumulated in the parent conversation prior to fork."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "active_goal": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "scope": { "type": "string" },
+        "acceptance_criteria": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["title", "scope"]
+    },
+    "settled_decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "decision": { "type": "string" },
+          "rationale": { "type": "string" },
+          "rejected_alternatives": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "evidence": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Deterministic file paths, commit hashes, or test results proving this decision."
+          }
+        },
+        "required": ["decision", "rationale"]
+      }
+    },
+    "working_tree_state": {
+      "type": "object",
+      "properties": {
+        "head_commit": { "type": "string" },
+        "branch": { "type": "string" },
+        "is_dirty": { "type": "boolean" },
+        "files_modified": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "files_untracked": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "diff_stat": { "type": "string" }
+      },
+      "required": ["head_commit", "is_dirty", "files_modified"]
+    },
+    "failed_approaches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "attempted": { "type": "string" },
+          "result": { "type": "string" },
+          "root_cause": { "type": "string" },
+          "barred_action": {
+            "type": "string",
+            "description": "Explicit instruction prohibiting the child agent from retrying this failed approach."
+          }
+        },
+        "required": ["attempted", "root_cause", "barred_action"]
+      }
+    },
+    "open_risks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "risk": { "type": "string" },
+          "severity": { "type": "string", "enum": ["low", "medium", "high"] },
+          "mitigation_or_test": { "type": "string" }
+        },
+        "required": ["risk", "severity"]
+      }
+    },
+    "immediate_next_action": {
+      "type": "object",
+      "properties": {
+        "action": { "type": "string" },
+        "target_file_or_command": { "type": "string" },
+        "expected_verification": { "type": "string" }
+      },
+      "required": ["action"]
+    }
+  },
+  "required": [
+    "forked_from_session_id",
+    "timestamp",
+    "active_goal",
+    "settled_decisions",
+    "working_tree_state",
+    "failed_approaches",
+    "open_risks",
+    "immediate_next_action"
+  ]
+}
