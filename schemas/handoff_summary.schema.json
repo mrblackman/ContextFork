@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/mrblackman/ContextFork/schemas/handoff_summary.schema.json",
   "title": "HandoffSummary",
-  "description": "Standardized 4-part structured handoff summary for clean-break session forking.",
+  "description": "Standardized 6-part structured handoff summary for clean-break session forking (IPSF-1.1).",
   "type": "object",
   "properties": {
     "forked_from_session_id": {
@@ -12,6 +12,10 @@
     "forked_at_step": {
       "type": "integer",
       "description": "Step index at which the fork occurred."
+    },
+    "accumulated_tokens": {
+      "type": "integer",
+      "description": "Total prompt tokens accumulated in the parent conversation prior to fork."
     },
     "timestamp": {
       "type": "string",
@@ -31,6 +35,16 @@
       "items": { "type": "string" },
       "description": "List of files created, modified, or deleted in the parent session."
     },
+    "failed_approaches": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Approaches, commands, or libraries that were attempted and failed, strictly barring the child agent from retrying them."
+    },
+    "open_risks": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Known edge cases, lingering architectural risks, or unverified assumptions."
+    },
     "immediate_next_step": {
       "type": "string",
       "description": "Exact next command, test, or code change to execute right now."
@@ -42,6 +56,8 @@
     "active_goal",
     "settled_decisions",
     "modified_files",
+    "failed_approaches",
+    "open_risks",
     "immediate_next_step"
   ]
 }
