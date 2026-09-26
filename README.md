@@ -269,6 +269,10 @@ The specification is designed for modular adoption across multiple developer int
 * **Agent Orchestration Frameworks (LangChain, AutoGen, CrewAI):**
   * Context lifecycle middleware and session state provider for subagent context shaping.
 
+> 🎨 **Concept mockup — not a screenshot.** This image illustrates the target IDE integration described in [§9 Integration Surfaces](#-9-integration-surfaces). No graphical implementation exists yet — `contextfork.py` is a terminal-only reference CLI (see [§6 Reference Implementation](#-6-reference-implementation-contextforkpy)). The UI shown here is a design goal, not a working feature.
+
+![Concept mockup of the target ContextFork IDE integration — illustrative, not a working screenshot](docs/concept-mockup-target-ui.png)
+
 ---
 
 ## 🗺️ 10. Relationship to Prior & Related Work
