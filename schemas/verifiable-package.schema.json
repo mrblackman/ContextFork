@@ -19,6 +19,19 @@
       "type": "string",
       "format": "date-time"
     },
+    "consumed": {
+      "type": "boolean",
+      "description": "Whether this checkpoint has been consumed by a continuation session."
+    },
+    "consumed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp when the package was consumed."
+    },
+    "consumed_by": {
+      "type": ["string", "null"],
+      "description": "Session ID of the continuation session that consumed the package."
+    },
     "package_files": {
       "type": "object",
       "properties": {

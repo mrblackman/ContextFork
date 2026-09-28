@@ -5,3 +5,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Local deployment profile configuration (contains personal paths)
+scripts/profiles.json
+

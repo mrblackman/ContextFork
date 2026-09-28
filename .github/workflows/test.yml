@@ -1,0 +1,71 @@
+name: Test Suite
+
+on:
+  push:
+    branches: [ "main", "release/**" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  cli-core:
+    name: CLI Core (Python ${{ matrix.python-version }} on ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Verify CLI Help
+        run: python contextfork.py --help
+
+      - name: Run Interactive Demo
+        run: python contextfork.py demo
+
+      - name: Test Explicit Export & Validate
+        run: |
+          python contextfork.py export --session "ci-session-42" --goal "CI Automated Verification" --tokens 12800 --steps 32 --force
+          python contextfork.py validate
+
+      - name: Test Untracked File Capture and Verification
+        run: |
+          python -c "from pathlib import Path; Path('ci_untracked_sample.txt').write_text('ContextFork untracked file CI test content', encoding='utf-8')"
+          python contextfork.py export --session "ci-untracked-test" --force
+          python contextfork.py validate
+          python -c "from pathlib import Path; Path('ci_untracked_sample.txt').unlink(missing_ok=True)"
+
+      - name: Verify Runtime Status
+        run: python contextfork.py status
+
+  mcp-tests:
+    name: MCP & State Integrity Tests (Windows, Python 3.13)
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Configure Git for Testing
+        run: |
+          git config --global user.name "CI Tester"
+          git config --global user.email "tester@ci.local"
+
+      - name: Install MCP Test Dependencies
+        run: pip install mcp pytest
+
+      - name: Run All Test Suites
+        run: python -m unittest discover tests

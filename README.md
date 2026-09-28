@@ -256,7 +256,92 @@ Beyond temporal continuity (Session A → Session B), ContextFork enables **role
 
 ---
 
-## 🔌 9. Integration Surfaces
+## 🛠️ 9. Model Context Protocol (MCP) Server Integration
+
+ContextFork includes an official reference integration for the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) (`examples/mcp-integration/contextfork_mcp.py`), allowing autonomous agents in Claude Desktop, Cursor, Antigravity, and other MCP-compliant hosts to autonomously inspect context telemetry, trigger verifiable checkpoints, and resume continuation sessions.
+
+### 9.1. Core MCP Tool Inventory (7 Tools)
+
+| Tool Name | Type | Description |
+| :--- | :--- | :--- |
+| `get_context_status(workspace_path)` | Read-only | Returns Git repository state (HEAD, branch, dirty tree) and presence of a `.contextfork` package. |
+| `export_session_context(goal, ...)` | Mutation | Generates the deterministic `.contextfork/` package and validates it against the IPSF-1.2 schema. |
+| `validate_session_context(workspace_path)` | Read-only | Validates package manifest integrity, diff applicability, and SHA-256 hashes of untracked files. |
+| `resume_session_context(package_id, ...)` | Mutation | Resumes active development, verifies Git drift, loads past decisions, and marks package as consumed with UTC timestamp and session ID. |
+| `get_package_details(workspace_path)` | Read-only | Returns structured Markdown table of all archived snapshots with consumed state and commit hashes. |
+| `clean_session_context(confirm, ...)` | Mutation | Cleans old consumed snapshot packages with dry-run safety and explicit confirmation. |
+| `read_handoff_summary(package_id)` | Read-only | Reads `handoff_summary.md` from active or specified snapshot package with zero-pending safety. |
+
+### 9.2. Installation & Prerequisites
+
+* **Core Engine (`contextfork.py`):** Requires Python 3.10+ and **zero external dependencies** (pure Python standard library).
+* **MCP Server (`contextfork_mcp.py`):** Requires the official Python MCP SDK:
+  ```bash
+  pip install mcp
+  ```
+
+### 9.3. Client Configurations
+
+#### Claude Desktop
+Add to your `claude_desktop_config.json` (`%APPDATA%\Claude\claude_desktop_config.json` on Windows or `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+
+```json
+{
+  "mcpServers": {
+    "contextfork": {
+      "command": "python",
+      "args": [
+        "/absolute/path/to/ContextFork/examples/mcp-integration/contextfork_mcp.py"
+      ],
+      "env": {
+        "PYTHONIOENCODING": "utf-8",
+        "CONTEXTFORK_ALLOWED_ROOTS": "/absolute/path/to/my-project;/absolute/path/to/ContextFork"
+      }
+    }
+  }
+}
+```
+
+#### Cursor (Settings → Features → MCP)
+* **Name:** `contextfork`
+* **Type:** `command`
+* **Command:** `python /absolute/path/to/ContextFork/examples/mcp-integration/contextfork_mcp.py`
+
+#### Google Antigravity
+In your user or workspace `mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "contextfork": {
+      "command": "python",
+      "args": [
+        "/absolute/path/to/ContextFork/examples/mcp-integration/contextfork_mcp.py"
+      ],
+      "env": {
+        "PYTHONIOENCODING": "utf-8",
+        "CONTEXTFORK_HOST": "antigravity",
+        "CONTEXTFORK_ALLOWED_ROOTS": "/absolute/path/to/my-project;/absolute/path/to/ContextFork"
+      }
+    }
+  }
+}
+```
+
+> **Host Signal Isolation:** Notice that `CONTEXTFORK_HOST` is **omitted** for Claude Desktop and Cursor. It is set to `"antigravity"` *only* when running under Google Antigravity to enable local SQLite conversation summary resolution. Omission ensures strict host isolation.
+
+### 9.4. Permitted Roots & Security Contract (`CONTEXTFORK_ALLOWED_ROOTS`)
+
+ContextFork enforces the **ZF-026 Allowed Roots Contract**:
+* Define allowed workspace directories separated by semicolons (`;`).
+* **Fail-Closed:** All configured paths MUST be absolute existing directories. Relative paths, directory traversal (`..`), UNC network paths (`\\server\share`), junction/symlink links, drive roots (`C:\`), and user home directories are strictly rejected.
+* If any entry is invalid, the entire environment variable is rejected to prevent silent security bypasses. See [SECURITY.md](SECURITY.md) for full policy details.
+
+> **Note on Deployment Automation:** `scripts/deploy_skill.py` is provided as an environment-specific deployment example tailored for Google Antigravity's schema cache and FastMCP manager. The current test suite and deployment scripts are Windows-oriented. Universal multi-client deployment is tracked in the Roadmap below.
+
+---
+
+## 🔌 10. Integration Surfaces
 
 The specification is designed for modular adoption across multiple developer interface layers:
 
@@ -269,13 +354,13 @@ The specification is designed for modular adoption across multiple developer int
 * **Agent Orchestration Frameworks (LangChain, AutoGen, CrewAI):**
   * Context lifecycle middleware and session state provider for subagent context shaping.
 
-> 🎨 **Concept mockup — not a screenshot.** This image illustrates the target IDE integration described in [§9 Integration Surfaces](#-9-integration-surfaces). No graphical implementation exists yet — `contextfork.py` is a terminal-only reference CLI (see [§6 Reference Implementation](#-6-reference-implementation-contextforkpy)). The UI shown here is a design goal, not a working feature.
+> 🎨 **Concept mockup — not a screenshot.** This image illustrates the target IDE integration described in [§10 Integration Surfaces](#-10-integration-surfaces). No graphical implementation exists yet — `contextfork.py` is a terminal-only reference CLI (see [§6 Reference Implementation](#-6-reference-implementation-contextforkpy)). The UI shown here is a design goal, not a working feature.
 
 ![Concept mockup of the target ContextFork IDE integration — illustrative, not a working screenshot](docs/concept-mockup-target-ui.png)
 
 ---
 
-## 🗺️ 10. Relationship to Prior & Related Work
+## 🗺️ 11. Relationship to Prior & Related Work
 
 ContextFork is not the first work in session continuity and context management. This section clarifies what the protocol adds:
 
@@ -291,7 +376,26 @@ ContextFork is not the first work in session continuity and context management. 
 
 ---
 
-## 📜 11. License & Attribution
+## 🚀 12. Project Roadmap (v1.3)
+
+The following capabilities are actively planned for upcoming releases:
+
+1. **Automated Handoff Template Validator & Telemetry:** Machine verification of `handoff_summary.md` sections to detect unfilled template placeholders and track lifecycle events.
+2. **Universal Cross-Client Deployment Automation:** Generalized CLI and open schema for deploying ContextFork skills and MCP configurations across Claude Desktop, Cursor, Windsurf, and Antigravity.
+3. **Atomic Target Deployment Integrity:** Content-hash verification, deploy manifest tracking, and atomic rollback protections for target client binary installations.
+4. **Content-Hash Promotion Gate:** SHA-256 content-hash comparison and verification of tested sandbox builds prior to developer tier promotion.
+5. **Dedicated Testing Fixtures:** Isolated reproducible test environments and mock session fixtures for automated verification without modifying local configurations.
+6. **Cross-Platform Test Suite Matrix:** Continuous integration testing expanded across Linux and macOS host environments.
+
+---
+
+## 🔒 13. Security Policy
+
+ContextFork maintains a comprehensive security architecture (including ZF-006 through ZF-026 zero-fault constraints). To report vulnerabilities or review our defense-in-depth model, please consult **[SECURITY.md](SECURITY.md)**.
+
+---
+
+## 📜 14. License & Attribution
 
 Released under the **[MIT License](LICENSE)**.
 

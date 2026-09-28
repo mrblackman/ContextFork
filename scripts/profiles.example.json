@@ -1,0 +1,28 @@
+{
+  "profiles": {
+    "sandbox_user": {
+      "user_name": "sandbox_user",
+      "tier": "sandbox",
+      "python_path": "python",
+      "config_path": "C:\\Users\\sandbox_user\\.gemini\\config\\mcp_config.json",
+      "skill_path": "C:\\Users\\sandbox_user\\.gemini\\antigravity\\skills\\contextfork\\SKILL.md",
+      "allowed_roots": [
+        "C:\\Projects\\my-project",
+        "C:\\Projects\\ContextFork"
+      ],
+      "host": "antigravity"
+    },
+    "developer": {
+      "user_name": "developer",
+      "tier": "live",
+      "python_path": "python",
+      "config_path": "C:\\Users\\developer\\.gemini\\config\\mcp_config.json",
+      "skill_path": "C:\\Users\\developer\\.gemini\\antigravity\\skills\\contextfork\\SKILL.md",
+      "allowed_roots": [
+        "C:\\Projects\\my-project",
+        "C:\\Projects\\ContextFork"
+      ],
+      "host": "antigravity"
+    }
+  }
+}
