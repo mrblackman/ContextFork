@@ -193,20 +193,94 @@ app = FastMCP(
 )
 
 
+def _get_effective_allowed_roots(force_reload: bool = False) -> tuple[Path, ...]:
+    """
+    Returns active ALLOWED_ROOTS. When force_reload=True in live host mode,
+    re-reads CONTEXTFORK_ALLOWED_ROOTS from the user's mcp_config.json and validates
+    via ZF-026 so newly authorized project directories take effect immediately without restart.
+    """
+    global ALLOWED_ROOTS
+    if not force_reload:
+        return ALLOWED_ROOTS
+
+    # Do not read live user config during isolated unit test fixture runs
+    if os.environ.get("CONTEXTFORK_DB_PATH") and not os.environ.get("CONTEXTFORK_CONFIG_PATH"):
+        return ALLOWED_ROOTS
+
+    config_candidates: list[Path] = []
+    cfg_override = os.environ.get("CONTEXTFORK_CONFIG_PATH")
+    if cfg_override:
+        config_candidates.append(Path(cfg_override))
+    else:
+        user_home = Path.home()
+        config_candidates.extend([
+            user_home / ".gemini" / "config" / "mcp_config.json",
+            user_home / ".gemini" / "antigravity" / "mcp_config.json",
+        ])
+
+    merged = list(ALLOWED_ROOTS)
+    seen = {os.path.normcase(str(p)) for p in merged}
+
+    for cfg_path in config_candidates:
+        if not cfg_path.is_file():
+            continue
+        try:
+            data = json.loads(cfg_path.read_text(encoding="utf-8"))
+            env_roots = (
+                data.get("mcpServers", {})
+                .get("contextfork", {})
+                .get("env", {})
+                .get("CONTEXTFORK_ALLOWED_ROOTS", "")
+            )
+            if env_roots and isinstance(env_roots, str):
+                parsed, warn = validate_and_parse_allowed_roots(
+                    env_str=env_roots,
+                    default_root=DEFAULT_REPO_ROOT
+                )
+                if not warn:
+                    for r in parsed:
+                        r_norm = os.path.normcase(str(r))
+                        if r_norm not in seen:
+                            seen.add(r_norm)
+                            merged.append(r)
+        except Exception:
+            continue
+
+    ALLOWED_ROOTS = tuple(merged)
+    return ALLOWED_ROOTS
+
+
 def _validate_and_resolve_workspace(raw_path: str = "") -> Path:
     """
     Validates target directory against ALLOWED_ROOTS, checks git status,
     and defends against Sibling Traversal, Path Traversal, and Junction loops.
+    Strict Single-Target Rule: Never falls back to ALLOWED_ROOTS[0] when raw_path is empty.
     """
-    if not ALLOWED_ROOTS:
+    if not raw_path or not raw_path.strip():
+        raise ValueError(
+            "Missing workspace_path: You MUST pass the active project's absolute directory path as 'workspace_path'. "
+            "Never call this tool with an empty workspace_path or fall back to another repository."
+        )
+
+    effective_roots = _get_effective_allowed_roots(force_reload=False)
+    if not effective_roots:
+        effective_roots = _get_effective_allowed_roots(force_reload=True)
+    if not effective_roots:
         warn = f" ({ALLOWED_ROOTS_WARNING})" if ALLOWED_ROOTS_WARNING else ""
         raise PermissionError(f"Access Denied: ALLOWED_ROOTS is empty{warn}. Please configure CONTEXTFORK_ALLOWED_ROOTS.")
 
-    target = Path(raw_path).resolve() if raw_path.strip() else ALLOWED_ROOTS[0]
+    target = Path(raw_path.strip()).resolve()
 
-    # 1. Sibling Traversal Shield (ZF-014)
-    if not any(target == root or target.is_relative_to(root) for root in ALLOWED_ROOTS):
-        raise PermissionError(f"Access Denied: Path '{target}' is outside ALLOWED_ROOTS.")
+    # 1. Sibling Traversal Shield (ZF-014) with on-demand config reload for newly authorized roots
+    if not any(target == root or target.is_relative_to(root) for root in effective_roots):
+        effective_roots = _get_effective_allowed_roots(force_reload=True)
+        if not any(target == root or target.is_relative_to(root) for root in effective_roots):
+            raise PermissionError(
+                f"Access Denied: Path '{target}' is outside ALLOWED_ROOTS. "
+                f"[ACTION REQUIRED: Do NOT retry with an empty workspace_path or fall back to another directory! "
+                f"Prompt the user via 'ask_question' to ask if they want to authorize '{target}' "
+                f"and create the .contextfork archive inside '{target}'.]"
+            )
 
     # 2. Git repo verification
     check = subprocess.run(
@@ -227,7 +301,7 @@ def _validate_and_resolve_workspace(raw_path: str = "") -> Path:
 
     # 3. Unchecked Git Toplevel Shield (ZF-016)
     resolved_repo = Path(check.stdout.strip()).resolve()
-    if not any(resolved_repo == root or resolved_repo.is_relative_to(root) for root in ALLOWED_ROOTS):
+    if not any(resolved_repo == root or resolved_repo.is_relative_to(root) for root in effective_roots):
         raise PermissionError(f"Access Denied: Git root '{resolved_repo}' escapes ALLOWED_ROOTS.")
 
     return resolved_repo
@@ -374,13 +448,13 @@ def _resolve_conversation_title(target_dir: Path, session_id: str = "") -> str:
 
 
 @app.tool()
-def get_context_status(workspace_path: str = "") -> str:
+def get_context_status(workspace_path: str) -> str:
     """
     Inspect the current repository Git state and ContextFork checkpoint archive status.
     Returns working tree cleanliness, HEAD commit, branch, and package presence.
 
     Args:
-        workspace_path: Absolute path to the git project (optional, defaults to ContextFork repo)
+        workspace_path: Absolute path to the active git project workspace (REQUIRED — never leave empty or fall back to another repository)
     """
     try:
         target_dir = _validate_and_resolve_workspace(workspace_path)
@@ -397,13 +471,13 @@ def get_context_status(workspace_path: str = "") -> str:
 
 
 @app.tool()
-def validate_session_context(workspace_path: str = "", package_id: str = "") -> str:
+def validate_session_context(workspace_path: str, package_id: str = "") -> str:
     """
     Validate an existing .contextfork package against the IPSF-1.2 specification.
     Verifies git_diff.patch, metadata integrity, and untracked file SHA-256 hashes.
 
     Args:
-        workspace_path: Absolute path to the git project (optional, defaults to ContextFork repo)
+        workspace_path: Absolute path to the active git project workspace (REQUIRED — never leave empty or fall back to another repository)
         package_id: Specific snapshot timestamp ID to validate (optional, defaults to latest)
     """
     try:
@@ -423,7 +497,7 @@ def validate_session_context(workspace_path: str = "", package_id: str = "") -> 
 
 @app.tool()
 def export_session_context(
-    workspace_path: str = "",
+    workspace_path: str,
     session_id: str = "",
     parent_title: str = "",
     goal: str = "Active Development Checkpoint",
@@ -436,7 +510,7 @@ def export_session_context(
     Automatically captures git diff HEAD, untracked files, status, lineage title, and IPSF-1.2 metadata.
 
     Args:
-        workspace_path: Absolute path to the git project (optional, defaults to ContextFork repo)
+        workspace_path: Absolute path to the active git project workspace (REQUIRED — never leave empty or fall back to another repository)
         session_id: Identifier of current parent session (optional)
         parent_title: Title of current conversation for lineage ancestry naming (optional)
         goal: Brief description of the current objective and settled architectural decisions
@@ -590,7 +664,7 @@ def _atomic_write_metadata(meta_file: Path, mdata: dict) -> None:
 
 @app.tool()
 def resume_session_context(
-    workspace_path: str = "",
+    workspace_path: str,
     package_id: str = "",
     session_id: str = ""
 ) -> str:
@@ -600,7 +674,7 @@ def resume_session_context(
     records session_id, and reports archive status.
 
     Args:
-        workspace_path: Absolute path to the git project (optional, defaults to ContextFork repo)
+        workspace_path: Absolute path to the active git project workspace (REQUIRED — never leave empty or fall back to another repository)
         package_id: Specific snapshot timestamp ID to resume from (optional, defaults to latest)
         session_id: Current continuation conversation session ID for lineage auditing
     """
@@ -780,13 +854,13 @@ def resume_session_context(
 
 
 @app.tool()
-def get_package_details(workspace_path: str = "") -> str:
+def get_package_details(workspace_path: str) -> str:
     """
     List all archived snapshots in the .contextfork repository with their consumed state and metadata.
     Returns a structured Markdown table (ZF-010 Token Safe).
 
     Args:
-        workspace_path: Absolute path to the git project (optional, defaults to ContextFork repo)
+        workspace_path: Absolute path to the active git project workspace (REQUIRED — never leave empty or fall back to another repository)
     """
     try:
         target_dir = _validate_and_resolve_workspace(workspace_path)
@@ -801,7 +875,7 @@ def get_package_details(workspace_path: str = "") -> str:
 
 @app.tool()
 def clean_session_context(
-    workspace_path: str = "",
+    workspace_path: str,
     confirm: bool = False,
     all_packages: bool = False
 ) -> str:
@@ -810,7 +884,7 @@ def clean_session_context(
     Requires explicit confirm=True to delete (Dry-run by default for safety).
 
     Args:
-        workspace_path: Absolute path to the git project (optional, defaults to ContextFork repo)
+        workspace_path: Absolute path to the active git project workspace (REQUIRED — never leave empty or fall back to another repository)
         confirm: Must be explicitly set to True to physically delete files (default: False dry-run)
         all_packages: If True, also cleans unconsumed packages (default: False, preserves unconsumed)
     """
@@ -853,7 +927,7 @@ def clean_session_context(
         clean_card = (
             f"🧹 **ContextFork Cleanup (Dry-Run)**\n\n"
             f"* **Eligible for removal:** `{safe_count}` consumed snapshot package(s).\n"
-            f"* **Action:** To confirm physical deletion, invoke `clean_session_context(confirm=True)` or run:\n"
+            f"* **Action:** To confirm physical deletion, invoke `clean_session_context(workspace_path=..., confirm=True)` or run:\n"
             f"```text\n/contextfork clean confirm\n```\n\n"
             f"> [!TIP]\n"
             f"> To keep your archive intact, simply ignore this notice and continue your work."
@@ -864,13 +938,13 @@ def clean_session_context(
 
 
 @app.tool()
-def read_handoff_summary(workspace_path: str = "", package_id: str = "") -> str:
+def read_handoff_summary(workspace_path: str, package_id: str = "") -> str:
     """
     Read the handoff_summary.md file from an active or specified package in .contextfork.
     Read-only inspection: does not modify metadata.
 
     Args:
-        workspace_path: Absolute path to the git project (optional, defaults to ContextFork repo)
+        workspace_path: Absolute path to the active git project workspace (REQUIRED — never leave empty or fall back to another repository)
         package_id: Specific snapshot timestamp ID to read (optional, defaults to latest unconsumed)
     """
     try:

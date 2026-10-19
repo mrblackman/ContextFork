@@ -420,6 +420,55 @@ class TestStateIntegrityRemediations(unittest.TestCase):
         finally:
             shutil.rmtree(old_test_dir, ignore_errors=True)
 
+    def test_empty_workspace_path_rejected_no_fallback(self):
+        """Empty workspace_path must raise an error and NEVER silently fall back to ALLOWED_ROOTS[0]."""
+        res_status = contextfork_mcp.get_context_status(workspace_path="")
+        self.assertIn("Missing workspace_path", res_status)
+        self.assertNotIn("[Target:", res_status)
+
+        res_whitespace = contextfork_mcp.get_context_status(workspace_path="   ")
+        self.assertIn("Missing workspace_path", res_whitespace)
+
+    def test_dynamic_allowed_roots_reload_from_config(self):
+        """Newly authorized project root in mcp_config.json is dynamically loaded without server restart."""
+        new_proj = Path(tempfile.mkdtemp(prefix="cf_dyn_proj_")).resolve()
+        cfg_file = Path(tempfile.mktemp(suffix="_mcp_config.json")).resolve()
+        try:
+            subprocess.run(["git", "init"], cwd=str(new_proj), stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=str(new_proj), check=True)
+            subprocess.run(["git", "config", "user.email", "tester@test.local"], cwd=str(new_proj), check=True)
+            (new_proj / "readme.md").write_text("hello", encoding="utf-8")
+            subprocess.run(["git", "add", "readme.md"], cwd=str(new_proj), check=True)
+            subprocess.run(["git", "commit", "-m", "init"], cwd=str(new_proj), check=True)
+
+            # 1. Before authorization: new_proj is outside ALLOWED_ROOTS
+            denied_res = contextfork_mcp.get_context_status(workspace_path=str(new_proj))
+            self.assertIn("outside ALLOWED_ROOTS", denied_res)
+            self.assertIn("ACTION REQUIRED", denied_res)
+
+            # 2. Simulate user authorizing new_proj via ask_question card -> written to mcp_config.json
+            cfg_data = {
+                "mcpServers": {
+                    "contextfork": {
+                        "env": {
+                            "CONTEXTFORK_ALLOWED_ROOTS": f"{self.test_dir};{new_proj}"
+                        }
+                    }
+                }
+            }
+            cfg_file.write_text(json.dumps(cfg_data), encoding="utf-8")
+            os.environ["CONTEXTFORK_CONFIG_PATH"] = str(cfg_file)
+
+            # 3. Retry immediately without restarting server -> succeeds!
+            allowed_res = contextfork_mcp.get_context_status(workspace_path=str(new_proj))
+            self.assertIn(f"[Target: {new_proj}]", allowed_res)
+        finally:
+            os.environ.pop("CONTEXTFORK_CONFIG_PATH", None)
+            if cfg_file.is_file():
+                cfg_file.unlink(missing_ok=True)
+            shutil.rmtree(new_proj, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+

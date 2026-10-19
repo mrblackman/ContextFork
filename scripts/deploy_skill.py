@@ -279,6 +279,12 @@ def deploy_profile(
     shutil.copy2(src_skill, skill_path)
     print(f"✅ Deployed SKILL.md -> {skill_path}")
 
+    # Also keep secondary global config skill location in sync if it exists
+    secondary_skill_path = dest_user_home / ".gemini" / "config" / "skills" / "contextfork" / "SKILL.md"
+    if secondary_skill_path.resolve() != skill_path.resolve() and secondary_skill_path.is_file():
+        shutil.copy2(src_skill, secondary_skill_path)
+        print(f"✅ Synchronized secondary SKILL.md -> {secondary_skill_path}")
+
     # Post-deployment verification of target hashes
     for fname, expected_hash in hashes.items():
         actual_hash = sha256_file(dest_bin_dir / fname)
